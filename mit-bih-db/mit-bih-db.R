@@ -1,85 +1,31 @@
 #caricamento dataset
 df <- read.csv("/Users/marcogreco/Documents/VSC/SAD_dataset/mit-bih-db.csv", stringsAsFactors = FALSE)
-library(dplyr)   
-#funzione per cercare celle vuote, valori Na/Nan e 0 per ogni colonna
-check_valori<-function(data) {
-  sapply(data, function(col){
-    zero <- sum(col == 0, na.rm = TRUE)
-    Stringhe_vuote<-sum(col== "", na.rm = TRUE)
-    valori_na<- sum(is.na(col))
-    valori_nan<-sum(is.nan(as.numeric(col)))
-    c(valori_zero = zero, na = valori_na, nan = valori_nan, vuote = Stringhe_vuote)
-  })
-}
 
-risultati <- check_valori(df)
-print(t(risultati))
+
+#Dalla documentazione del dataset sono state scoperte diverse anomalie nei dati, per la maggior parte dei pazienti il lead superiore dell'ECG è il MLII fatta eccezione per i
+# pazienti 102 e 104 in cui il valore di MLII va imputato con il valore della colonna V5 corrispondente al paziente, il lead inferiore per i pazienti rimane tipicamente il V1,
+# per quanto riguarda invece il paziente 114 i valori del lead superiore (MLII) e quello inferiore (V1) sono stati invertiti.
+# È stato annotato inoltre che i pazienti 102 104 107 e 217 sono pazienti con pacemaker. e che il paziente 106 ha ectopici prominenti mostrando battiti anomali
 
 
 
-pazienti_na <- sort(unique(pull(filter(df, is.na(MLII)), Partecipante)))
-
-na_per_paziente <- data.frame(
-  Partecipante = character(),
-  total_samples = numeric(),
-  na_MLII_count = numeric(),
-  na_MLII_percent = numeric(),
-  stringsAsFactors = FALSE
-)
-
-for (paz in pazienti_na) {
-  subset_paz <- df[df$Partecipante == paz, ]
-  total <- nrow(subset_paz)
-  na_count <- sum(is.na(subset_paz$MLII))
-  na_perc <- round(na_count / total * 100, 2)
-  
-  na_per_paziente <- rbind(na_per_paziente, data.frame(
-    Partecipante = paz,
-    total_samples = total,
-    na_MLII_count = na_count,
-    na_MLII_percent = na_perc,
-    stringsAsFactors = FALSE
-  ))
-}
+#Normalizzazione del dataset per i pazienti 102 e 104, come documentazione riporta come upper lead è stato usato V5 dato che sono mancanti di MLII quindi il valore V5 relativo ai pazienti
+#verrà sostituito nella cella inerente a MLII
 
 
-cat("pazienti unici na", length(pazienti_na))
-print((pazienti_na))
+#Modifichiamo i record di 102 e 104 imputando i valori con V5->MLII
+#carichiamo i pazienti 
+p102_104<- c(102,104) 
+df$MLII[df$Partecipante %in% p102_104]<-df$V5[df$Partecipante %in% p102_104]
+df$V5[df$Partecipante %in% p102_104]<- NA
 
-cat("Conteggio NA V1 solo per pazienti con NA:\n")
-print(na_per_paziente)
+#Modifica del record 114, invertendo il valore dei segnali del lead inferiore e superiore
+p114<- 114
+MLII_temp <- df$MLII[df$Partecipante == p114]
+df$MLII[df$Partecipante == p114] <- df$V5[df$Partecipante == p114]
+df$V5[df$Partecipante == p114]   <- MLII_temp
+rm(MLII_temp)
 
 
-#conteggio V1
-# Id dei pazienti che hanno almeno un NA in V1
-pazienti_na_V1 <- sort(unique(pull(filter(df, is.na(V1)), Partecipante)))
+cat("modifiche apportate ai pazienti 102 104 e 114")
 
-# Data frame riassuntivo per V1
-na_per_paziente_V1 <- data.frame(
-  Partecipante = character(),
-  total_samples = numeric(),
-  na_V1_count = numeric(),
-  na_V1_percent = numeric(),
-  stringsAsFactors = FALSE
-)
-
-for (paz in pazienti_na_V1) {
-  subset_paz <- df[df$Partecipante == paz, ]
-  total <- nrow(subset_paz)
-  na_count <- sum(is.na(subset_paz$V1))
-  na_perc <- round(na_count / total * 100, 2)
-  
-  na_per_paziente_V1 <- rbind(na_per_paziente_V1, data.frame(
-    Partecipante = paz,
-    total_samples = total,
-    na_V1_count = na_count,
-    na_V1_percent = na_perc,
-    stringsAsFactors = FALSE
-  ))
-}
-
-cat("Pazienti con almeno un NA in V1:", length(pazienti_na_V1), "\n")
-print(pazienti_na_V1)
-
-cat("Conteggio NA V1 per paziente (e percentuale):\n")
-print(na_per_paziente_V1)
