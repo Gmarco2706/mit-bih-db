@@ -157,7 +157,7 @@ conta_occorrenze_leads <- function(dt) {
 # 2. ESECUZIONE MAIN 
 # ==============================================================================
 
-path_dataset <- "../mit_bih_dataset_puro.csv"
+path_dataset <- "../../mit_bih_dataset_puro.csv"
 id_target <- 219
 samples_target <- 20000:25000
 
@@ -224,7 +224,7 @@ if (!is.null(df_V_waves) && nrow(df_V_waves) > 0) {
 } else { cat("Nessun segmento trovato.\n") }
 
 # Salvataggio Output
-file_output <- "../pvc_segmentati_dataset.csv"
+file_output <- "../../pvc_segmentati_dataset.csv"
 
 if (!is.null(df_V_waves) && nrow(df_V_waves) > 0) {
   cat(paste0("\nSalvataggio del dataset segmentato in: ", file_output, " ... "))

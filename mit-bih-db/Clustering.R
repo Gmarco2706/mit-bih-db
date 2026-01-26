@@ -14,7 +14,7 @@ theme_ecg <- theme_bw() +
 # ==============================================================================
 # 1. CARICAMENTO DATI
 # ==============================================================================
-file_input <- "../pvc_segmentati_dataset.csv"
+file_input <- "../../pvc_segmentati_dataset.csv"
 
 if (!file.exists(file_input)) stop("ERRORE: File non trovato. Esegui prima lo Script 1.")
 
