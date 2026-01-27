@@ -176,25 +176,15 @@ print(tabella_leads)
 
 # Filtro pazienti con lead necessari
 df_signal <- df_signal[Paziente %in% df_signal[, .(keep = any(!is.na(MLII)) & any(!is.na(V1))), by = Paziente][(keep), Paziente]]
-
 cat("Conteggio occorrenze dopo filtro lead...\n")
 tabella_leads <- conta_occorrenze_leads(df_signal)
 print(tabella_leads)
 
-# Verifica duplicati
-conteggio_pvc_duplicati <- df_signal[Paziente %in% c(201, 202) & Picco == "V", .N, by = Paziente]
-cat("\n--- VERIFICA BATTITI PVC PER PAZIENTE DUPLICATO ---\n")
-print(conteggio_pvc_duplicati)
-remove(conteggio_pvc_duplicati)
-
-# Pulizia e Correzioni canali
-df_signal <- df_signal[Paziente != 202]
-df_signal <- esegui_correzioni_canali(df_signal)
-
-print(genera_plot_segmento(df_signal, id_target, samples_target, "Visualizzazione Onda - Pre-normalizzazione"))
 
 # Normalizzazione Globale Z-Score
 cat("\n--- ESECUZIONE NORMALIZZAZIONE Z-SCORE SU INTERO DATASET ---\n")
+#df_signal[, MLII := MLII - median(MLII, na.rm = TRUE), by = Paziente]
+#df_signal[, V1 := V1 - median(V1, na.rm = TRUE), by = Paziente]
 df_signal[, MLII := as.numeric(scale(MLII)), by = Paziente]
 df_signal[, V1 := as.numeric(scale(V1)), by = Paziente]
 cat("Normalizzazione Z-Score completata.\n")
@@ -210,8 +200,34 @@ df_signal <- correggi_picchi_locali(df_signal, raggio = 18)
 cat("Correzione completata.\n")
 print(genera_plot_segmento(df_signal, id_target, samples_target, "Verifica Segmentazione - Post correzione"))
 
+
+#Correzione canali
+df_signal <- esegui_correzioni_canali(df_signal)
+
+
+
+#salvataggio dei pazienti con battiti normali
+W_PRE  <- 100; W_POST <- 100;
+cat(paste("\nEstrazione con finestra:", (W_PRE + W_POST)/360, "ms (Circa", W_PRE + W_POST,"Samples)"))
+df_N_waves <- estrai_segmenti_battiti(df_signal, target_labels = "N", win_pre = W_PRE, win_post = W_POST)
+print(genera_plot_griglia(df_N_waves, n_battiti = 6, titolo = "Dettaglio Primi Battiti Estratti Normali"))
+
+
+# Verifica duplicati
+conteggio_pvc_duplicati <- df_signal[Paziente %in% c(201, 202) & Picco == "V", .N, by = Paziente]
+cat("\n--- VERIFICA BATTITI PVC PER PAZIENTE DUPLICATO ---\n")
+print(conteggio_pvc_duplicati)
+remove(conteggio_pvc_duplicati)
+
+
+# Pulizia
+df_signal <- df_signal[Paziente != 202]
+
+print(genera_plot_segmento(df_signal, id_target, samples_target, "Visualizzazione Onda - Pre-normalizzazione"))
+
+
+
 # Estrazione Segmenti PVC (Parametri specifici)
-W_PRE  <- 100; W_POST <- 50;  
 cat(paste("\nEstrazione con finestra:", (W_PRE + W_POST)/360, "ms (Circa", W_PRE + W_POST,"Samples)"))
 df_V_waves <- estrai_segmenti_battiti(df_signal, target_labels = "V", win_pre = W_PRE, win_post = W_POST)
 
@@ -224,14 +240,17 @@ if (!is.null(df_V_waves) && nrow(df_V_waves) > 0) {
 } else { cat("Nessun segmento trovato.\n") }
 
 # Salvataggio Output
-file_output <- "../../pvc_segmentati_dataset.csv"
+#file_output <- "../../pvc_segmentati_dataset.csv"
 
-if (!is.null(df_V_waves) && nrow(df_V_waves) > 0) {
-  cat(paste0("\nSalvataggio del dataset segmentato in: ", file_output, " ... "))
-  fwrite(df_V_waves, file_output)
-  cat("Completato!\n")
-  cat(paste("Totale righe salvate:", nrow(df_V_waves), "\n"))
-  cat(paste("Totale battiti unici:", length(unique(df_V_waves$Beat_ID)), "\n"))
-} else {
-  cat("\nATTENZIONE: Nessun dato da salvare (il dataframe è vuoto).\n")
-}
+#if (!is.null(df_V_waves) && nrow(df_V_waves) > 0) {
+#  cat(paste0("\nSalvataggio del dataset segmentato in: ", file_output, " ... "))
+# fwrite(df_V_waves, file_output)
+# cat("Completato!\n")
+#  cat(paste("Totale righe salvate:", nrow(df_V_waves), "\n"))
+#  cat(paste("Totale battiti unici:", length(unique(df_V_waves$Beat_ID)), "\n"))
+#} else {
+#  cat("\nATTENZIONE: Nessun dato da salvare (il dataframe è vuoto).\n")
+#}
+
+remove(df_signal)
+

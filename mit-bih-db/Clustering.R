@@ -1,5 +1,3 @@
-library(data.table)
-library(ggplot2)
 library(dbscan)   # Algoritmo per il clustering basato su densità
 library(cluster)  # Calcolo delle metriche di validazione (Silhouette Score)
 library(plotly)
@@ -14,25 +12,25 @@ theme_ecg <- theme_bw() +
 # ==============================================================================
 # 1. CARICAMENTO DATI
 # ==============================================================================
-file_input <- "../../pvc_segmentati_dataset.csv"
-
-if (!file.exists(file_input)) stop("ERRORE: File non trovato. Esegui prima lo Script 1.")
-
-cat("--- CARICAMENTO DATASET ---\n")
-df_waves <- fread(file_input)
-cat(paste("Caricati", length(unique(df_waves$Beat_ID)), "battiti unici.\n"))
-
-if (!"V1" %in% names(df_waves)) {
-  stop("ERRORE CRITICO: Il dataset non contiene la colonna 'V1'. \nDevi rieseguire lo Script 1 filtrando i pazienti che hanno MLII + V1.")
-}
+# file_input <- "../../pvc_segmentati_dataset.csv"
+# 
+# if (!file.exists(file_input)) stop("ERRORE: File non trovato. Esegui prima lo Script 1.")
+# 
+# cat("--- CARICAMENTO DATASET ---\n")
+# df_V_waves <- fread(file_input)
+# cat(paste("Caricati", length(unique(df_V_waves$Beat_ID)), "battiti unici.\n"))
+# 
+# if (!"V1" %in% names(df_V_waves)) {
+#   stop("ERRORE CRITICO: Il dataset non contiene la colonna 'V1'. \nDevi rieseguire lo Script 1 filtrando i pazienti che hanno MLII + V1.")
+# }
 
 # ==============================================================================
 # 2. PREPARAZIONE MATRICI (VERSIONE MULTICANALE)
 # ==============================================================================
 cat("Creazione matrici morfologiche (Doppio Canale)...\n")
 
-matrice_MLII_dt <- dcast(df_waves, Beat_ID ~ Tempo_Locale, value.var = "MLII")
-matrice_V1_dt   <- dcast(df_waves, Beat_ID ~ Tempo_Locale, value.var = "V1")
+matrice_MLII_dt <- dcast(df_V_waves, Beat_ID ~ Tempo_Locale, value.var = "MLII")
+matrice_V1_dt   <- dcast(df_V_waves, Beat_ID ~ Tempo_Locale, value.var = "V1")
 
 beat_ids <- matrice_MLII_dt$Beat_ID
 
@@ -68,7 +66,8 @@ matrice_combinata <- cbind(feat_MLII$shape, feat_V1$shape)
 pca_res <- prcomp(matrice_combinata, center = TRUE, scale. = FALSE)
 
 # STAMPA SUMMARY PCA (Analisi della varianza spiegata)
-print(summary(pca_res))
+#print(summary(pca_res))
+summary(pca_res)$importance["Cumulative Proportion", ]
 
 # Selezione delle prime componenti per la morfologia globale
 X_pca <- pca_res$x[, 1:7]
@@ -113,7 +112,7 @@ cat(paste("Battiti scartati come Rumore:", sum(labels == 0), "\n"))
 # ==============================================================================
 
 map_cluster <- data.table(Beat_ID = beat_ids, Cluster = labels)
-df_clustered <- merge(df_waves, map_cluster, by = "Beat_ID")
+df_clustered <- merge(df_V_waves, map_cluster, by = "Beat_ID")
 df_clean <- df_clustered[Cluster != 0]
 
 # Tabella frequenze
