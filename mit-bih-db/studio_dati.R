@@ -328,8 +328,9 @@ df_V_V1_clean   <- df_V_V1[-indici_da_rimuovere, ]
 matrice_V_MLII_clean <- matrice_V_MLII[-indici_da_rimuovere, ]
 matrice_V_V1_clean   <- matrice_V_V1[-indici_da_rimuovere, ]
 
-fwrite(as.data.table(matrice_V_MLII_clean), file = "../../matrice_MLII_clean.csv", col.names = TRUE) # salvataggio per generazione dati sintetici
-fwrite(as.data.table(matrice_V_V1_clean), file = "../../matrice_V1_clean.csv", col.names = TRUE) # salvataggio per generazione dati sintetici
+# Scrittura su file
+fwrite(as.data.table(matrice_V_MLII_clean), file = "../matrice_MLII_clean.csv", col.names = TRUE) # salvataggio per generazione dati sintetici
+fwrite(as.data.table(matrice_V_V1_clean), file = "../matrice_V1_clean.csv", col.names = TRUE) # salvataggio per generazione dati sintetici
 
 cat("\n--- RESOCONTO ELIMINAZIONE INCROCIATA OUTLIER ---\n")
 totali <- nrow(df_V_MLII); rimossi <- length(indici_da_rimuovere); rimasti <- totali - rimossi
