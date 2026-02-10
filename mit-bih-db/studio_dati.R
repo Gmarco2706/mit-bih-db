@@ -370,9 +370,11 @@ cat(">>> Analisi delle dipendenze tra i canali per la classe V...\n")
 # Dataset unico per i battiti V con i dati di entrambi i canali
 df_V_full <- data.table(
   Amp_MLII  = df_V_MLII_clean$Max_Amp,
+  Skew_MLII = df_V_MLII_clean$Skewness,
   Kurt_MLII = df_V_MLII_clean$Kurtosis,
   Amp_V1    = df_V_V1_clean$Max_Amp,
-  Kurt_V1   = df_V_V1_clean$Kurtosis
+  Kurt_V1   = df_V_V1_clean$Kurtosis,
+  Skew_V1   = df_V_V1_clean$Skewness
 )
 
 # Calcolo correlazione
@@ -393,8 +395,23 @@ print(ggplot(df_V_full, aes(x = Amp_MLII, y = Amp_V1)) +
   geom_point(alpha = 0.3, color = "red") +
   theme_ecg +
   labs(title = "OB1: Relazione Ampiezza MLII vs V1 (Solo V)",
-       subtitle = "Identificazione di bias di ampiezza tra le derivazioni",
        x = "Ampiezza MLII (mV)", y = "Ampiezza V1 (mV)"))
+
+# --- SCATTER PLOT INCROCIATO ---
+print(ggplot(df_V_full, aes(x = Skew_MLII, y = Skew_V1)) +
+        geom_point(alpha = 0.3, color = "orange") +
+        theme_ecg +
+        labs(title = "OB1: Relazione Skewness MLII vs V1 (Solo V)",
+             x = "Skewness MLII", y = "Skewness V1"))
+
+# --- SCATTER PLOT INCROCIATO ---
+print(ggplot(df_V_full, aes(x = Kurt_MLII, y = Kurt_V1)) +
+        geom_point(alpha = 0.3, color = "green") +
+        theme_ecg +
+        labs(title = "OB1: Relazione Curtosi MLII vs V1 (Solo V)",
+             subtitle = "Identificazione di bias di ampiezza tra le derivazioni",
+             x = "Curtosi MLII", y = "Curtosi V1"))
+
 
 # --- PULIZIA FINALE ---
 remove(df_N_MLII, df_V_MLII, df_N_V1, df_V_V1)
