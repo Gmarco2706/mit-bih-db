@@ -13,8 +13,8 @@ path_context_MLII <- "../Dati_Sintetici_GPT-5_context_aware/matrice_MLII_clean_s
 path_context_V1   <- "../Dati_Sintetici_GPT-5_context_aware/matrice_V1_clean_sintetici.csv"
 
 # Dataset 2: No Context
-path_no_context_MLII <- "../../Dati_sintetici_GPT-5_no_context/matrice_MLII_clean_sintetici.csv"
-path_no_context_V1   <- "../../Dati_sintetici_GPT-5_no_context/matrice_V1_clean_sintetici.csv"
+path_no_context_MLII <- "../Dati_sintetici_GPT-5_no_context/matrice_MLII_clean_sintetici.csv"
+path_no_context_V1   <- "../Dati_sintetici_GPT-5_no_context/matrice_V1_clean_sintetici.csv"
 
 # ==============================================================================
 # 2. FUNZIONI DI SUPPORTO E GRAFICA
@@ -79,7 +79,7 @@ analizza_dataset <- function(path_mlii, path_v1, nome_dataset, col_hist, col_box
   df_MLII <- estrai_features_statistiche(m_MLII, nome_dataset)
   df_V1   <- estrai_features_statistiche(m_V1,   nome_dataset)
   
-  # 3. Istogrammi MLII
+  # 3. Istogrammi MLII (Combinati per risparmiare spazio, se vuoi separare anche questi dimmelo)
   p1 <- plot_istogramma_con_media(df_MLII, "Max_Amp", paste(nome_dataset, "- Ampiezza MLII"), col_hist)
   p2 <- plot_istogramma_con_media(df_MLII, "Skewness", paste(nome_dataset, "- Skewness MLII"), col_hist)
   p3 <- plot_istogramma_con_media(df_MLII, "Kurtosis", paste(nome_dataset, "- Kurtosis MLII"), col_hist)
@@ -98,36 +98,58 @@ analizza_dataset <- function(path_mlii, path_v1, nome_dataset, col_hist, col_box
   b3 <- crea_boxplot_ob1(df_box, "Kurtosis", "Kurtosis", col_box)
   print((b1 | b2 | b3) + plot_annotation(title = paste("BOXPLOT:", nome_dataset)))
   
-  # 6. Heatmap Correlazione Incrociata
+  # 6. Preparazione Dati Correlazione e Scatter
   df_full <- data.table(
     Amp_MLII  = df_MLII$Max_Amp,
     Kurt_MLII = df_MLII$Kurtosis,
+    Skew_MLII = df_MLII$Skewness,
     Amp_V1    = df_V1$Max_Amp,
-    Kurt_V1   = df_V1$Kurtosis
+    Kurt_V1   = df_V1$Kurtosis,
+    Skew_V1   = df_V1$Skewness
   )
-  cor_mat <- cor(df_full, use = "complete.obs")
   
+  # Heatmap Correlazione Incrociata
+  cor_mat <- cor(df_full, use = "complete.obs")
   print(ggplot(melt(cor_mat), aes(Var1, Var2, fill=value)) +
           geom_tile() +
           scale_fill_gradient2(low="blue", high="red", mid="white", limit=c(-1,1)) +
-          geom_text(aes(label = round(value, 2)), size = 4) +
+          geom_text(aes(label = round(value, 2)), size = 3) +
           theme_minimal() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
           labs(title = paste("Correlazione Incrociata:", nome_dataset),
                subtitle = "MLII vs V1 Feature Dependencies", x="", y=""))
   
-  # 7. Scatter Plot Bias
+  # 7. Scatter Plots (STAMPATI SEPARATAMENTE)
+  
+  # --- Scatter 1: Ampiezza ---
   print(ggplot(df_full, aes(x = Amp_MLII, y = Amp_V1)) +
           geom_point(alpha = 0.3, color = col_box) +
           theme_ecg +
-          labs(title = paste("Scatter Plot:", nome_dataset),
-               subtitle = "Relazione Ampiezza MLII vs V1",
-               x = "Ampiezza MLII (mV)", y = "Ampiezza V1 (mV)"))
+          labs(title = paste("Scatter Ampiezza:", nome_dataset),
+               subtitle = "Correlazione Ampiezza MLII vs V1",
+               x = "Ampiezza MLII", y = "Ampiezza V1"))
+  
+  # --- Scatter 2: Skewness ---
+  print(ggplot(df_full, aes(x = Skew_MLII, y = Skew_V1)) +
+          geom_point(alpha = 0.3, color = col_box) +
+          theme_ecg +
+          labs(title = paste("Scatter Skewness:", nome_dataset),
+               subtitle = "Correlazione Skewness MLII vs V1",
+               x = "Skewness MLII", y = "Skewness V1"))
+  
+  # --- Scatter 3: Kurtosis ---
+  print(ggplot(df_full, aes(x = Kurt_MLII, y = Kurt_V1)) +
+          geom_point(alpha = 0.3, color = col_box) +
+          theme_ecg +
+          labs(title = paste("Scatter Kurtosis:", nome_dataset),
+               subtitle = "Correlazione Kurtosis MLII vs V1",
+               x = "Kurtosis MLII", y = "Kurtosis V1"))
   
   # 8. Ritorna statistiche medie per tabella finale
   return(data.table(
     Dataset = nome_dataset,
-    Amp_MLII = mean(df_MLII$Max_Amp), Kurt_MLII = mean(df_MLII$Kurtosis),
-    Amp_V1 = mean(df_V1$Max_Amp),     Kurt_V1 = mean(df_V1$Kurtosis)
+    Amp_MLII = mean(df_MLII$Max_Amp), Kurt_MLII = mean(df_MLII$Kurtosis), Skew_MLII = mean(df_MLII$Skewness),
+    Amp_V1 = mean(df_V1$Max_Amp),     Kurt_V1 = mean(df_V1$Kurtosis),     Skew_V1 = mean(df_V1$Skewness)
   ))
 }
 
@@ -140,8 +162,8 @@ res_context <- analizza_dataset(
   path_context_MLII, 
   path_context_V1, 
   "CONTEXT AWARE (GPT-5)", 
-  "forestgreen",  # Colore Istogrammi
-  "darkgreen"     # Colore Boxplot
+  "forestgreen", 
+  "darkgreen"
 )
 
 # --- B. ANALISI NO CONTEXT ---
@@ -149,8 +171,8 @@ res_no_context <- analizza_dataset(
   path_no_context_MLII, 
   path_no_context_V1, 
   "NO CONTEXT (GPT-5)", 
-  "purple",       # Colore Istogrammi
-  "darkorchid"    # Colore Boxplot
+  "purple",       
+  "darkorchid"
 )
 
 # ==============================================================================
