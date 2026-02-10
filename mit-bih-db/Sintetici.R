@@ -8,13 +8,18 @@ library(reshape2)
 # 1. CONFIGURAZIONE PATH
 # ==============================================================================
 
-# Dataset 1: Context Aware
+# Dataset 1: Context Aware (Sintetici)
 path_context_MLII <- "../Dati_Sintetici_GPT-5_context_aware/matrice_MLII_clean_sintetici.csv"
 path_context_V1   <- "../Dati_Sintetici_GPT-5_context_aware/matrice_V1_clean_sintetici.csv"
 
-# Dataset 2: No Context
+# Dataset 2: No Context (Sintetici)
 path_no_context_MLII <- "../Dati_sintetici_GPT-5_no_context/matrice_MLII_clean_sintetici.csv"
 path_no_context_V1   <- "../Dati_sintetici_GPT-5_no_context/matrice_V1_clean_sintetici.csv"
+
+# Dataset 3: DATI REALI (Necessari per il confronto finale)
+# NOTA: Assicurati che questi percorsi siano corretti
+path_real_MLII <- "../matrice_MLII_clean.csv"
+path_real_V1   <- "../matrice_V1_clean.csv"
 
 # ==============================================================================
 # 2. FUNZIONI DI SUPPORTO E GRAFICA
@@ -63,6 +68,45 @@ crea_boxplot_ob1 <- function(df, y_var, titolo, colore) {
     theme_ecg + labs(title = titolo, y = y_var, x = "Derivazione")
 }
 
+# --- NUOVA FUNZIONE PER CONFRONTO REALE vs SINTETICO ---
+esegui_confronto_reale_vs_sintetico <- function(path_r, path_s, canale_nome) {
+  # 1. Carica Matrici
+  # Usa tryCatch per evitare crash se mancano i file reali
+  tryCatch({
+    m_real <- as.matrix(fread(path_r, header = TRUE))
+    m_syn  <- as.matrix(fread(path_s, header = TRUE))
+    
+    # 2. Estrai Features
+    df_real <- estrai_features_statistiche(m_real, "Reale")
+    df_syn  <- estrai_features_statistiche(m_syn,  "GPT-5 Context")
+    
+    # 3. Unione Dati
+    df_combined <- rbind(df_real, df_syn)
+    
+    # 4. Reshape per Faceting (Ampiezza, Skewness, Kurtosis)
+    df_long <- melt(df_combined, id.vars = c("Classe"), 
+                    measure.vars = c("Max_Amp", "Skewness", "Kurtosis"),
+                    variable.name = "Metrica", value.name = "Valore")
+    
+    # 5. Plot Sovrapposto
+    p <- ggplot(df_long, aes(x = Valore, fill = Classe)) +
+      geom_histogram(alpha = 0.5, position = "identity", bins = 40, color="black", linewidth=0.1) +
+      facet_wrap(~Metrica, scales = "free", ncol = 3) + # 3 pannelli affiancati
+      scale_fill_manual(values = c("Reale" = "#d95f02", "GPT-5 Context" = "#1b9e77")) +
+      theme_bw() +
+      theme(legend.position = "top", 
+            strip.text = element_text(face="bold", size=11)) +
+      labs(title = paste("Confronto Distribuzioni REALE vs SINTETICO -", canale_nome),
+           subtitle = "Sovrapposizione istogrammi per validazione",
+           x = "", y = "Frequenza")
+    
+    print(p)
+    
+  }, error = function(e) {
+    cat(paste("\nATTENZIONE: Impossibile caricare i file per il confronto", canale_nome, "\nVerifica i percorsi path_real_...\n"))
+  })
+}
+
 analizza_dataset <- function(path_mlii, path_v1, nome_dataset, col_hist, col_box) {
   
   cat(paste0("\n======================================================\n"))
@@ -79,7 +123,7 @@ analizza_dataset <- function(path_mlii, path_v1, nome_dataset, col_hist, col_box
   df_MLII <- estrai_features_statistiche(m_MLII, nome_dataset)
   df_V1   <- estrai_features_statistiche(m_V1,   nome_dataset)
   
-  # 3. Istogrammi MLII (Combinati per risparmiare spazio, se vuoi separare anche questi dimmelo)
+  # 3. Istogrammi MLII 
   p1 <- plot_istogramma_con_media(df_MLII, "Max_Amp", paste(nome_dataset, "- Ampiezza MLII"), col_hist)
   p2 <- plot_istogramma_con_media(df_MLII, "Skewness", paste(nome_dataset, "- Skewness MLII"), col_hist)
   p3 <- plot_istogramma_con_media(df_MLII, "Kurtosis", paste(nome_dataset, "- Kurtosis MLII"), col_hist)
@@ -119,33 +163,30 @@ analizza_dataset <- function(path_mlii, path_v1, nome_dataset, col_hist, col_box
           labs(title = paste("Correlazione Incrociata:", nome_dataset),
                subtitle = "MLII vs V1 Feature Dependencies", x="", y=""))
   
-  # 7. Scatter Plots (STAMPATI SEPARATAMENTE)
+  # 7. Scatter Plots (SEPARATI COME RICHIESTO)
   
-  # --- Scatter 1: Ampiezza ---
+  # Scatter 1: Ampiezza
   print(ggplot(df_full, aes(x = Amp_MLII, y = Amp_V1)) +
           geom_point(alpha = 0.3, color = col_box) +
           theme_ecg +
           labs(title = paste("Scatter Ampiezza:", nome_dataset),
-               subtitle = "Correlazione Ampiezza MLII vs V1",
                x = "Ampiezza MLII", y = "Ampiezza V1"))
   
-  # --- Scatter 2: Skewness ---
+  # Scatter 2: Skewness
   print(ggplot(df_full, aes(x = Skew_MLII, y = Skew_V1)) +
           geom_point(alpha = 0.3, color = col_box) +
           theme_ecg +
           labs(title = paste("Scatter Skewness:", nome_dataset),
-               subtitle = "Correlazione Skewness MLII vs V1",
                x = "Skewness MLII", y = "Skewness V1"))
   
-  # --- Scatter 3: Kurtosis ---
+  # Scatter 3: Kurtosis
   print(ggplot(df_full, aes(x = Kurt_MLII, y = Kurt_V1)) +
           geom_point(alpha = 0.3, color = col_box) +
           theme_ecg +
           labs(title = paste("Scatter Kurtosis:", nome_dataset),
-               subtitle = "Correlazione Kurtosis MLII vs V1",
                x = "Kurtosis MLII", y = "Kurtosis V1"))
   
-  # 8. Ritorna statistiche medie per tabella finale
+  # 8. Ritorna statistiche medie
   return(data.table(
     Dataset = nome_dataset,
     Amp_MLII = mean(df_MLII$Max_Amp), Kurt_MLII = mean(df_MLII$Kurtosis), Skew_MLII = mean(df_MLII$Skewness),
@@ -171,9 +212,21 @@ res_no_context <- analizza_dataset(
   path_no_context_MLII, 
   path_no_context_V1, 
   "NO CONTEXT (GPT-5)", 
-  "purple",       
+  "purple",        
   "darkorchid"
 )
+
+# --- C. NUOVO CONFRONTO: REALE vs CONTEXT AWARE ---
+cat("\n======================================================\n")
+cat("   GENERAZIONE CONFRONTO: REALE vs GPT-5 CONTEXT\n")
+cat("======================================================\n")
+
+# Confronto MLII
+esegui_confronto_reale_vs_sintetico(path_real_MLII, path_context_MLII, "MLII")
+
+# Confronto V1
+esegui_confronto_reale_vs_sintetico(path_real_V1, path_context_V1, "V1")
+
 
 # ==============================================================================
 # 4. TABELLA COMPARATIVA FINALE
