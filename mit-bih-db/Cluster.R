@@ -4,6 +4,7 @@ library(plotly)
 library(RColorBrewer)
 library(e1071)
 library(ggplot2)
+library(cluster)
 
 # --- CONFIGURAZIONE ---
 EPS_VAL   <- 8.2
@@ -76,7 +77,24 @@ cat(sprintf("CLUSTER TROVATI: %d (Rumore: %d | %.1f%%)\n", max(labs), n_noise, 1
 
 if(max(labs) > 0) {
   # 1. WSS
-  cat(sprintf("WSS (Compattezza): %.2f\n", calcola_wss(X1, labs)))
+  wss_val <- calcola_wss(X1, labs)
+  cat(sprintf("WSS (Compattezza): %.2f\n", wss_val))
+  
+  # --- NUOVA PARTE: SILHOUETTE SCORE ---
+  # Calcoliamo solo sui punti assegnati (escludendo il rumore 0)
+  idx_clustered <- which(labs != 0)
+  
+  if(length(unique(labs[idx_clustered])) > 1) {
+    cat(">>> Calcolo Silhouette Score (potrebbe richiedere qualche secondo)...\n")
+    # Calcolo distanza euclidea solo sui punti clusterizzati
+    dist_matrix <- dist(X1[idx_clustered, ])
+    sil_obj <- silhouette(labs[idx_clustered], dist_matrix)
+    avg_sil <- mean(sil_obj[, 3])
+    cat(sprintf("Silhouette Score Medio: %.4f\n", avg_sil))
+  } else {
+    cat("Silhouette Score: Non calcolabile (Meno di 2 cluster validi trovati)\n")
+  }
+  # -------------------------------------
   
   # 2. CONTEGGIO
   cat("\nBATTITI PER CLUSTER:\n")
@@ -124,7 +142,7 @@ if(max(labs) > 0) {
     # -----------------------------------
     
     df_plot_list[[paste0(k,"_M")]] <- data.table(Cluster=k, Canale="MLII", t=t_axis, mV=avg_MLII)
-    df_plot_list[[paste0(k,"_V")]] <- data.table(Cluster=k, Canale="V1",   t=t_axis, mV=avg_V1)
+    df_plot_list[[paste0(k,"_V")]] <- data.table(Cluster=k, Canale="V1",    t=t_axis, mV=avg_V1)
   }
   
   df_melt <- rbindlist(df_plot_list)
