@@ -6,8 +6,8 @@ library(e1071)
 library(ggplot2)
 
 # --- CONFIGURAZIONE ---
-EPS_VAL   <- 7.2
-PCA_COMPS <- 14
+EPS_VAL   <- 8.2
+PCA_COMPS <- 21
 FS        <- 360
 
 if(!exists("beat_ids")) beat_ids <- 1:nrow(matrice_V_MLII_clean)
@@ -60,7 +60,7 @@ K1 <- ncol(X1) * 2
 # ==============================================================================
 # 2. DBSCAN
 # ==============================================================================
-cat(sprintf(">>> [2] DBSCAN (EPS=%.1f, MinPts=%d)...\n", EPS_VAL, K1))
+cat(sprintf(">>> [2] DBSCAN (EPS=%.2f, MinPts=%d)...\n", EPS_VAL, K1))
 set.seed(123)
 res <- dbscan(X1, eps=EPS_VAL, minPts=K1)
 labs <- res$cluster

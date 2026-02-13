@@ -285,10 +285,10 @@ print((b1_v | b2_v | b3_v) + plot_annotation(title = "BOXPLOT PVC: Analisi Outli
 # --------------------------------------------------------------------------------------------------------------
 # --- 4. ISPEZIONE OUTLIER E ANOMALIE ---
 
-id_sospetti_unici <- unique(c(which((df_V_MLII$Max_Amp > 6  & df_V_MLII$Max_Amp<1) | df_V_MLII$Kurtosis > 7.5), which(df_V_V1$Max_Amp > 6 | df_V_V1$Kurtosis > 15 | df_V_V1$Skewness > 2.5 & df_V_V1$Skewness < -5.0)))
+id_sospetti_unici <- unique(c(which((df_V_MLII$Max_Amp > 6 | df_V_MLII$Max_Amp<1) | df_V_MLII$Kurtosis > 7.5), which(df_V_V1$Max_Amp > 6 | df_V_V1$Kurtosis > 15 | df_V_V1$Skewness > 2.5 | df_V_V1$Skewness < -5.0)))
 if(length(id_sospetti_unici) > 0) {
   df_comparativo <- data.table()
-  for(i in id_sospetti_unici[1:min(4, length(id_sospetti_unici))]) {
+  for(i in id_sospetti_unici[1:min(6, length(id_sospetti_unici))]) {
     t_ms <- (1:ncol(matrice_V_MLII) - (CAMPIONI_PRIMA + 1)) * (1000/360)
     temp <- rbind(data.table(t = t_ms, mV = matrice_V_MLII[i, ], Canale = "MLII", ID = paste("Battito ID:", i)),
                   data.table(t = t_ms, mV = matrice_V_V1[i, ],   Canale = "V1",   ID = paste("Battito ID:", i)))
@@ -317,8 +317,8 @@ if(length(id_kurt_20_50) > 0) {
 # --------------------------------------------------------------------------------------------------------------
 # --- 5. ELIMINAZIONE INCROCIATA E RESOCONTO ---
 
-outlier_MLII <- which((df_V_MLII$Max_Amp > 6  & df_V_MLII$Max_Amp<1) | df_V_MLII$Kurtosis > 7.5) # Valori presi dal boxplot
-outlier_V1 <- which(df_V_V1$Max_Amp > 6 | df_V_V1$Kurtosis > 15 | df_V_V1$Skewness > 2.5 & df_V_V1$Skewness < -5.0) # Valori presi dal boxplot
+outlier_MLII <- which((df_V_MLII$Max_Amp > 6  | df_V_MLII$Max_Amp<1) | df_V_MLII$Kurtosis > 7.5) # Valori presi dal boxplot
+outlier_V1 <- which(df_V_V1$Max_Amp > 6 | df_V_V1$Kurtosis > 15 | df_V_V1$Skewness > 2.5 | df_V_V1$Skewness < -5.0) # Valori presi dal boxplot
 indici_da_rimuovere <- unique(c(outlier_MLII, outlier_V1))
 
 cat(sprintf(">>> Eliminazione incrociata: rimozione di %d battiti su %d totali.\n", length(indici_da_rimuovere), nrow(df_V_MLII)))
@@ -337,9 +337,9 @@ totali <- nrow(df_V_MLII); rimossi <- length(indici_da_rimuovere); rimasti <- to
 cat(sprintf("Battiti PVC Iniziali: %d\nBattiti Rimossi: %d\nBattiti Puliti: %d\nPercentuale Rimossa: %.2f%%\n", totali, rimossi, rimasti, (rimossi/totali)*100))
 
 resoconto_medie <- data.table(
-  Feature = c("Max_Amp_MLII", "Kurtosis_MLII", "Max_Amp_V1", "Kurtosis_V1"),
-  Prima = c(mean(df_V_MLII$Max_Amp), mean(df_V_MLII$Kurtosis), mean(df_V_V1$Max_Amp), mean(df_V_V1$Kurtosis)),
-  Dopo  = c(mean(df_V_MLII_clean$Max_Amp), mean(df_V_MLII_clean$Kurtosis), mean(df_V_V1_clean$Max_Amp), mean(df_V_V1_clean$Kurtosis))
+  Feature = c("Max_Amp_MLII", "Deviazione_Standard_AMP_MLII","Skewness_MLII","Deviazione_Standard_Skewness_MLII","Kurtosis_MLII", "Deviazione_Standard_Kurtosis_MLII", "Max_Amp_V1", "Deviazione_Standard_AMP_V1","Skewness_V1", "Deviazione_Standard_Skewness_V1", "Kurtosis_V1", "Deviazione_Standard_Kurtosis_V1"),
+  Prima = c(mean(df_V_MLII$Max_Amp), sd(df_V_MLII$Max_Amp),mean(df_V_MLII$Skewness), sd(df_V_MLII$Skewness), mean(df_V_MLII$Kurtosis), sd(df_V_MLII$Kurtosis), mean(df_V_V1$Max_Amp), sd(df_V_V1$Max_Amp), mean(df_V_V1$Skewness), sd(df_V_V1$Skewness), mean(df_V_V1$Kurtosis), sd(df_V_V1$Kurtosis)),
+  Dopo  = c(mean(df_V_MLII_clean$Max_Amp), sd(df_V_MLII_clean$Max_Amp), mean(df_V_MLII_clean$Skewness), sd(df_V_MLII_clean$Skewness), mean(df_V_MLII_clean$Kurtosis), sd(df_V_MLII_clean$Kurtosis), mean(df_V_V1_clean$Max_Amp), sd(df_V_V1_clean$Max_Amp), mean(df_V_V1_clean$Skewness), sd(df_V_V1_clean$Skewness), mean(df_V_V1_clean$Kurtosis), sd(df_V_V1_clean$Kurtosis))
 )
 resoconto_medie[, Variazione_Perc := ((Dopo - Prima) / Prima) * 100]
 print(resoconto_medie)
