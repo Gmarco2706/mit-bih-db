@@ -4,16 +4,14 @@ library(reshape2)
 library(e1071)
 
 # ==============================================================================
-# CONFIGURAZIONE SOGLIE
+# CONFIGURAZIONE SOGLIE (APPROCCIO FULL Z-SCORE)
 # ==============================================================================
-# 1. FORMA E DIMENSIONE
-SOGLIA_SOSPETTO <- 0.85   # Forma: Correlazione > 85%
-SOGLIA_AMP_MIN  <- 0.70   # Ampiezza: 70% - 130%
-SOGLIA_AMP_MAX  <- 1.30   
+# 1. FORMA
+SOGLIA_SOSPETTO <- 0.80   # Correlazione > 80% su ENTRAMBI i canali
 
-# 2. STATISTICHE (Kurtosis e Skewness)
-SOGLIA_DIFF_KURT <- 3.0   
-SOGLIA_DIFF_SKEW <- 1.0   
+#Quantili
+Q_LOW  <- 0.025
+Q_HIGH <- 0.975 
 
 FS <- 360
 
@@ -21,154 +19,201 @@ FS <- 360
 # STEP 0: CONTROLLO DATI
 # ==============================================================================
 cat(">>> [STEP 0] Verifica dati...\n")
-if(!exists("centroidi")) stop("Mancano i 'centroidi'. Esegui script Clustering.")
-if(!exists("matrice_N_MLII")) stop("Mancano le matrici N. Esegui script studio_dati.R")
+if(!exists("centroidi")) stop("Mancano i 'centroidi'.")
+if(!exists("labs")) stop("Manca il vettore 'labs'.")
+if(!exists("matrice_V_MLII_clean") | !exists("matrice_V_V1_clean")) stop("Mancano le matrici originali.")
 
 # ==============================================================================
-# STEP 1: PREPARAZIONE E PRE-CALCOLO METRICHE SU 'N' (DOPPIO CANALE)
+# STEP 1: PREPARAZIONE METRICHE SU 'N' (DOPPIO CANALE)
 # ==============================================================================
-cat(">>> [STEP 1] Calcolo Metriche Avanzate (MLII + V1) su Battiti N...\n")
+cat(">>> [STEP 1] Calcolo Metriche su Battiti N...\n")
 
-# A. Centratura
-mat_N_M <- sweep(matrice_N_MLII, 1, rowMeans(matrice_N_MLII), "-")
-mat_N_V <- sweep(matrice_N_V1,   1, rowMeans(matrice_N_V1),   "-")
-ids_N   <- 1:nrow(mat_N_M)
+ids_N   <- 1:nrow(matrice_N_MLII)
 
-# B. Calcolo Ampiezze N 
-amps_N  <- apply(mat_N_M, 1, function(x) max(x) - min(x))
+# B. Calcolo Ampiezze N
+cat("    - Calcolo Ampiezze MLII e V1 su N...\n")
+amps_N_M <- apply(matrice_N_MLII, 1, function(x) max(x) - min(x))
+amps_N_V <- apply(matrice_N_V1, 1, function(x) max(x) - min(x)) # Corretto uso matrice originale per ampiezza
 
-# C. Calcolo Kurtosis e Skewness su ENTRAMBI i canali
-cat("    - Calcolo Statistiche MLII e V1...\n")
-K_N_M <- apply(mat_N_M, 1, kurtosis, type=2); S_N_M <- apply(mat_N_M, 1, skewness, type=2)
-K_N_V <- apply(mat_N_V, 1, kurtosis, type=2); S_N_V <- apply(mat_N_V, 1, skewness, type=2)
+# C. Calcolo Kurtosis e Skewness N
+cat("    - Calcolo Statistiche MLII e V1 su N...\n")
+K_N_M <- apply(matrice_N_MLII, 1, kurtosis, type=2); 
+S_N_M <- apply(matrice_N_MLII, 1, skewness, type=2)
+K_N_V <- apply(matrice_N_V1, 1, kurtosis, type=2); 
+S_N_V <- apply(matrice_N_V1, 1, skewness, type=2)
 
-# ==============================================================================
-# STEP 2: SCANSIONE FORENSE
-# ==============================================================================
-cat(">>> [STEP 2] Scansione Forense...\n")
+cat(">>> Profilazione Statistica Completa (Ampiezza, Skew, Kurt)...\n")
+cat("    - Calcolo metriche su tutte le PVC originali per costruire i riferimenti...\n")
 
-classifica <- data.frame()
+# 1. Calcoliamo TUTTO per le PVC originali (V)
+# Ampiezza
+A_V_all_M <- apply(matrice_V_MLII_clean, 1, function(x) max(x)-min(x))
+A_V_all_V <- apply(matrice_V_V1_clean, 1, function(x) max(x)-min(x))
+# Kurtosis
+K_V_all_M <- apply(matrice_V_MLII_clean, 1, kurtosis, type=2)
+K_V_all_V <- apply(matrice_V_V1_clean, 1, kurtosis, type=2)
+# Skewness
+S_V_all_M <- apply(matrice_V_MLII_clean, 1, skewness, type=2)
+S_V_all_V <- apply(matrice_V_V1_clean, 1, skewness, type=2)
+
+cluster_stats <- list()
 nomi_cluster <- names(centroidi)
 
 for(k in nomi_cluster) {
-  cent <- centroidi[[k]]
-  len_sig <- min(ncol(mat_N_M), length(cent$MLII))
+  idx_k <- which(labs == as.numeric(k))
+  
+  # Salviamo i quantili Inferiore e Superiore per TUTTE le 6 variabili
+  cluster_stats[[k]] <- list(
+    # --- MLII ---
+    AmpM_qL = quantile(A_V_all_M[idx_k], probs=Q_LOW), 
+    AmpM_qH = quantile(A_V_all_M[idx_k], probs=Q_HIGH),
+    #---
+    KM_qL   = quantile(K_V_all_M[idx_k], probs=Q_LOW), 
+    KM_qH   = quantile(K_V_all_M[idx_k], probs=Q_HIGH),
+    #---
+    SM_qL   = quantile(S_V_all_M[idx_k], probs=Q_LOW), 
+    SM_qH   = quantile(S_V_all_M[idx_k], probs=Q_HIGH),
+    
+    # --- V1 ---
+    AmpV_qL = quantile(A_V_all_V[idx_k], probs=Q_LOW), 
+    AmpV_qH = quantile(A_V_all_V[idx_k], probs=Q_HIGH),
+    #---
+    KV_qL   = quantile(K_V_all_V[idx_k], probs=Q_LOW), 
+    KV_qH   = quantile(K_V_all_V[idx_k], probs=Q_HIGH),
+    #---
+    SV_qL   = quantile(S_V_all_V[idx_k], probs=Q_LOW), 
+    SV_qH   = quantile(S_V_all_V[idx_k], probs=Q_HIGH)
+  )
+}
+
+
+# --- BLOCCO GRAFICO: VISUALIZZAZIONE DISTRIBUZIONI (Quantili) ---
+cat(">>> Generazione Istogrammi Statistici per Cluster...\n")
+
+# 1. Prepariamo i dati delle distribuzioni
+df_dist <- data.frame(
+  Cluster = labs,
+  # MLII
+  Amp_M = A_V_all_M, 
+  Kur_M = K_V_all_M, 
+  Skw_M = S_V_all_M,
+  # V1
+  Amp_V = A_V_all_V, 
+  Kur_V = K_V_all_V, 
+  Skw_V = S_V_all_V
+)
+
+# 2. Ciclo per ogni Cluster
+for(k in nomi_cluster) {
+  
+  # A. Dati del Cluster corrente
+  df_k <- subset(df_dist, Cluster == as.numeric(k))
+  stats <- cluster_stats[[k]]
+  
+  # B. Creiamo gli Istogrammi delle Statistiche (6 pannelli)
+  df_k_long <- melt(df_k[, -1]) # Rimuovi colonna Cluster dal melt
+  
+  # Creazione dataframe per le linee di riferimento (Quantili 0.15% e 99.85%)
+  df_lines <- data.frame(
+    variable = c("Amp_M", "Kur_M", "Skw_M", "Amp_V", "Kur_V", "Skw_V"),
+    q_low  = c(stats$AmpM_qL, stats$KM_qL, stats$SM_qL, stats$AmpV_qL, stats$KV_qL, stats$SV_qL),
+    q_high = c(stats$AmpM_qH, stats$KM_qH, stats$SM_qH, stats$AmpV_qH, stats$KV_qH, stats$SV_qH)
+  )
+  
+  p_hist <- ggplot(df_k_long, aes(x=value)) +
+    # Istogramma di sfondo
+    geom_histogram(aes(y=..density..), bins=30, fill="skyblue", color="black", alpha=0.6) +
+    # Linea di densità lisciata
+    geom_density(color="darkblue", size=1) +
+    
+    # Linee dei Quantili (Rosse Tratteggiate - Limiti Empirici)
+    geom_vline(data=df_lines, aes(xintercept=q_low), color="red", linetype="dashed", size=1) +
+    geom_vline(data=df_lines, aes(xintercept=q_high), color="red", linetype="dashed", size=1) +
+    
+    facet_wrap(~variable, scales="free", ncol=3) +
+    theme_bw() +
+    labs(title=paste("Distribuzione Statistica Cluster", k), 
+         subtitle="Linee Rosse: Intervallo di Tolleranza Empirico (95% dei dati)",
+         x="Valore Metrica", y="Densità")
+  
+  print(p_hist)
+}
+# ----------------------------------------------------------------------
+
+# ==============================================================================
+# STEP 2: SCANSIONE FORENSE (Z-SCORE)
+# ==============================================================================
+cat(">>> [STEP 2] Scansione Forense (Z-Score)...\n")
+
+classifica <- data.frame()
+
+for(k in nomi_cluster) {
+  cent  <- centroidi[[k]]
+  stats <- cluster_stats[[k]] 
+  
+  len_sig <- min(ncol(matrice_N_MLII), length(cent$MLII))
   
   # 1. Dati Segmentati
-  seg_N_M <- mat_N_M[, 1:len_sig]; tpl_M <- cent$MLII[1:len_sig]
-  seg_N_V <- mat_N_V[, 1:len_sig]; tpl_V <- cent$V1[1:len_sig]
+  seg_N_M <- matrice_N_MLII[, 1:len_sig]; 
+  tpl_M <- cent$MLII[1:len_sig]
+  seg_N_V <- matrice_N_V1[, 1:len_sig]; 
+  tpl_V <- cent$V1[1:len_sig]
   
-  # 2. Correlazione
+  # 2. Correlazione (Minimo dei due canali)
   avg_corr <- pmin(as.vector(cor(t(seg_N_M), tpl_M)), as.vector(cor(t(seg_N_V), tpl_V)))
   
-  # 3. Rapporto Ampiezza 
-  ratio_amp <- amps_N / (cent$Amp + 1e-6)
+  # 3. TEST DEI QUANTILI
   
-  # 4. Differenza Statistica (Media MLII + V1)
-  K_T_M <- kurtosis(tpl_M, type=2); S_T_M <- skewness(tpl_M, type=2)
-  K_T_V <- kurtosis(tpl_V, type=2); S_T_V <- skewness(tpl_V, type=2)
+  # Restituisce TRUE se è dentro, FALSE se è fuori
+  pass_AmpM <- (amps_N_M >= stats$AmpM_qL) & (amps_N_M <= stats$AmpM_qH)
+  pass_AmpV <- (amps_N_V >= stats$AmpV_qL) & (amps_N_V <= stats$AmpV_qH)
   
-  diff_k_avg <- (abs(K_N_M - K_T_M) + abs(K_N_V - K_T_V)) / 2
-  diff_s_avg <- (abs(S_N_M - S_T_M) + abs(S_N_V - S_T_V)) / 2
+  pass_KM <- (K_N_M >= stats$KM_qL) & (K_N_M <= stats$KM_qH)
+  pass_KV <- (K_N_V >= stats$KV_qL) & (K_N_V <= stats$KV_qH)
+  
+  pass_SM <- (S_N_M >= stats$SM_qL) & (S_N_M <= stats$SM_qH)
+  pass_SV <- (S_N_V >= stats$SV_qL) & (S_N_V <= stats$SV_qH)
+  
+  # 4. AGGREGAZIONE LOGICA (Deve superare TUTTI i 6 test contemporaneamente)
+  # Se la somma dei TRUE è 6, significa che ha passato tutto.
+  punteggio_pass <- pass_AmpM + pass_AmpV + pass_KM + pass_KV + pass_SM + pass_SV
+  ha_passato_tutto <- (punteggio_pass == 6)
   
   classifica <- rbind(classifica, data.frame(
     Beat_ID = ids_N,
     Cluster_PVC = as.numeric(k),
     Correlazione = avg_corr,
-    Rapporto_Amp = as.vector(ratio_amp),
-    Diff_Kurt = as.vector(diff_k_avg),
-    Diff_Skew = as.vector(diff_s_avg)
+    Passa_Statistica = ha_passato_tutto
   ))
 }
 
 dt_class <- as.data.table(classifica)
 
 # ==============================================================================
-# STEP 3: CALCOLO "BEST MATCH" PER CLUSTER
+# STEP 5: FILTRO COLPEVOLI (CRITERIO UNICO)
 # ==============================================================================
-# Ricerca del battito N che ha la correlazione più alta per ogni Cluster PVC,
-# indipendentemente dal fatto che sia un "falso negativo" o no.
-cat(">>> Identificazione Miglior Candidato per ogni Cluster...\n")
-dt_best_per_cluster <- dt_class[order(Cluster_PVC, -Correlazione), .SD[1], by=Cluster_PVC]
-
-
-# ==============================================================================
-# STEP 4: VISUALIZZAZIONE "MIGLIOR MATCH" PER OGNI CLUSTER
-# ==============================================================================
-if(nrow(dt_best_per_cluster) > 0) {
-  cat("\n>>> Generazione Grafico: IL MIGLIOR 'N' PER OGNI CLUSTER PVC...\n")
-  
-  lista_plot_best <- list()
-  
-  for(i in 1:nrow(dt_best_per_cluster)) {
-    bid   <- dt_best_per_cluster$Beat_ID[i]
-    clust <- dt_best_per_cluster$Cluster_PVC[i]
-    cent  <- centroidi[[as.character(clust)]]
-    len_p <- min(ncol(mat_N_M), length(cent$MLII))
-    
-    lbl <- paste0("CLUSTER ", clust, "\nBest N: ", bid, "\n",
-                  "Corr: ", round(dt_best_per_cluster$Correlazione[i]*100,0), "% | Amp: ", round(dt_best_per_cluster$Rapporto_Amp[i], 2), "x\n",
-                  "dK: ", round(dt_best_per_cluster$Diff_Kurt[i], 1), " | dS: ", round(dt_best_per_cluster$Diff_Skew[i], 1))
-    
-    df_temp <- rbind(
-      data.frame(Time=1:len_p, mV=mat_N_M[bid, 1:len_p], Canale="MLII", Tipo="Recuperato (N)", Panel=lbl),
-      data.frame(Time=1:len_p, mV=mat_N_V[bid, 1:len_p], Canale="V1",   Tipo="Recuperato (N)", Panel=lbl),
-      data.frame(Time=1:len_p, mV=cent$MLII[1:len_p],    Canale="MLII", Tipo="PVC Template",   Panel=lbl),
-      data.frame(Time=1:len_p, mV=cent$V1[1:len_p],      Canale="V1",   Tipo="PVC Template",   Panel=lbl)
-    )
-    lista_plot_best[[i]] <- df_temp
-  }
-  
-  df_tot_best <- do.call(rbind, lista_plot_best)
-  df_tot_best$Tipo <- factor(df_tot_best$Tipo, levels = c("Recuperato (N)", "PVC Template"))
-  df_tot_best$Panel <- factor(df_tot_best$Panel, levels = unique(df_tot_best$Panel))
-  
-  p_best <- ggplot(df_tot_best, aes(x=Time, y=mV)) +
-    theme_bw() +
-    geom_line(aes(color=Tipo, linetype=Tipo, size=Tipo)) +
-    scale_color_manual(values = c("Recuperato (N)"="blue", "PVC Template"="red")) +
-    scale_linetype_manual(values = c("Recuperato (N)"="solid", "PVC Template"="dashed")) +
-    scale_size_manual(values = c("Recuperato (N)"=0.8, "PVC Template"=1.0)) +
-    
-    # Griglia: Righe=Cluster, Colonne=Canali
-    facet_grid(Panel ~ Canale, scales="free_y", switch="y") +
-    
-    labs(title = "PANORAMICA: IL MIGLIOR CANDIDATO 'N' PER OGNI CLUSTER PVC", 
-         subtitle="Questi sono i battiti N che più assomigliano ai cluster (anche se non sono errori certi).", 
-         x="Campioni", y="mV") +
-    theme(legend.position="top", strip.text.y.left = element_text(angle=0, size=7, face="bold"),
-          panel.spacing.y = unit(0.5, "lines"))
-  
-  print(p_best)
-}
-
-
-# ==============================================================================
-# STEP 5: FILTRO COLPEVOLI 
-# ==============================================================================
-# Ricerca errori (Falsi Negativi)
 dt_best_match <- dt_class[order(Beat_ID, -Correlazione), .SD[1], by=Beat_ID]
 
+# Il battito è colpevole se ha una grande correlazione E ha passato il test dei quantili
 dt_colpevoli <- dt_best_match[
   Correlazione > SOGLIA_SOSPETTO & 
-    Rapporto_Amp >= SOGLIA_AMP_MIN & Rapporto_Amp <= SOGLIA_AMP_MAX &
-    Diff_Kurt <= SOGLIA_DIFF_KURT &
-    Diff_Skew <= SOGLIA_DIFF_SKEW
+    Passa_Statistica == TRUE
 ]
 
 n_tot <- nrow(dt_best_match)
 n_colp <- nrow(dt_colpevoli)
 
 cat("\n============================================================\n")
-cat(" REPORT FORENSE: ANALISI FALSI NEGATIVI\n")
+cat(" REPORT FORENSE\n")
 cat("============================================================\n")
 cat(sprintf("Totale Battiti 'N' Scansionati: %d\n", n_tot))
 cat("CRITERI DI ACCUSA:\n")
 cat(sprintf("  1. Correlazione > %.0f%%\n", SOGLIA_SOSPETTO*100))
-cat(sprintf("  2. Ampiezza %.0f%% - %.0f%%\n", SOGLIA_AMP_MIN*100, SOGLIA_AMP_MAX*100))
-cat(sprintf("  3. dKurt < %.1f | dSkew < %.1f\n", SOGLIA_DIFF_KURT, SOGLIA_DIFF_SKEW))
+cat(sprintf("  2. COERENZA STATISTICA TOTALE: Intervallo Quantilico (%.2f%% - %.2f%%)\n", Q_LOW*100, Q_HIGH*100))
+cat("      (Il battito deve rientrare nel 95% della distribuzione empirica per:\n")
+cat("       Ampiezza, Skewness e Curtosi sui due i canali)\n")
 cat("------------------------------------------------------------\n")
-cat(sprintf("BATTITI CONFERMATI COME 'V': %d (%.2f%%)\n", n_colp, (n_colp/n_tot)*100))
+cat(sprintf("CANDIDATI SELEZIONATI: %d (%.3f%%)\n", n_colp, (n_colp/n_tot)*100))
 cat("============================================================\n")
 
 
@@ -178,22 +223,23 @@ cat("============================================================\n")
 if(n_colp > 0) {
   cat("\n>>> Generazione Grafico Casi Confermati...\n")
   
-  n_show <- min(n_colp, 8) 
+  n_show <- min(n_colp, 12) 
   lista_plot_data <- list()
   
   for(i in 1:n_show) {
     bid   <- dt_colpevoli$Beat_ID[i]
     clust <- dt_colpevoli$Cluster_PVC[i]
     cent  <- centroidi[[as.character(clust)]]
-    len_p <- min(ncol(mat_N_M), length(cent$MLII))
+    len_p <- min(ncol(matrice_N_MLII), length(cent$MLII))
     
+    # Etichetta aggiornata: rimossi i riferimenti allo Z-Score
     lbl <- paste0("CASO ", i, "\nBeat ", bid, " (Cl ", clust, ")\n",
-                  "Corr: ", round(dt_colpevoli$Correlazione[i]*100,0), "% | Amp: ", round(dt_colpevoli$Rapporto_Amp[i], 2), "x\n",
-                  "dK: ", round(dt_colpevoli$Diff_Kurt[i], 1), " | dS: ", round(dt_colpevoli$Diff_Skew[i], 1))
+                  "Corr: ", round(dt_colpevoli$Correlazione[i]*100,0), "%\n",
+                  "Statistica: PASS (95%)")
     
     df_temp <- rbind(
-      data.frame(Time=1:len_p, mV=mat_N_M[bid, 1:len_p], Canale="MLII", Tipo="Recuperato (N)", Panel=lbl),
-      data.frame(Time=1:len_p, mV=mat_N_V[bid, 1:len_p], Canale="V1",   Tipo="Recuperato (N)", Panel=lbl),
+      data.frame(Time=1:len_p, mV=matrice_N_MLII[bid, 1:len_p], Canale="MLII", Tipo="Recuperato (N)", Panel=lbl),
+      data.frame(Time=1:len_p, mV=matrice_N_V1[bid, 1:len_p], Canale="V1",   Tipo="Recuperato (N)", Panel=lbl),
       data.frame(Time=1:len_p, mV=cent$MLII[1:len_p],    Canale="MLII", Tipo="PVC Template",   Panel=lbl),
       data.frame(Time=1:len_p, mV=cent$V1[1:len_p],      Canale="V1",   Tipo="PVC Template",   Panel=lbl)
     )
@@ -211,16 +257,16 @@ if(n_colp > 0) {
     scale_linetype_manual(values = c("Recuperato (N)"="solid", "PVC Template"="dashed")) +
     scale_size_manual(values = c("Recuperato (N)"=0.8, "PVC Template"=1.0)) +
     facet_grid(Panel ~ Canale, scales="free_y", switch="y") +
-    labs(title = "FALSI NEGATIVI CONFERMATI (ERRORI GRAVI)", 
-         subtitle="Questi battiti superano TUTTE le soglie di somiglianza.", 
+    # Titoli aggiornati
+    labs(title = "CANDIDATI FALSI NEGATIVI (QUANTILI EMPIRICI)", 
+         subtitle="Battiti simili al cluster (Ampiezza e Forma entro il 95% empirico).", 
          x="Campioni", y="mV") +
-    theme(legend.position="top", strip.text.y.left = element_text(angle=0, size=8, face="bold"), 
+    theme(legend.position="top", strip.text.y.left = element_text(angle=0, size=7, face="bold"), 
           panel.spacing.y = unit(0.5, "lines"))
   
   print(p)
   
 } else {
-  cat("Nessun falso negativo confermato.\n")
+  cat("Nessun candidato trovato.\n")
 }
-
 cat("Analisi Completata.\n")

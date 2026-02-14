@@ -135,7 +135,6 @@ if(max(labs) > 0) {
       avg_V1   <- matrice_V_V1_clean[idx,]
     }
     
-    # --- PARTE AGGIUNTA FONDAMENTALE ---
     # Calcoliamo l'ampiezza di riferimento e salviamo nella lista 'centroidi'
     amp_ref <- max(avg_MLII) - min(avg_MLII)
     centroidi[[as.character(k)]] <- list(MLII = avg_MLII, V1 = avg_V1, Amp = amp_ref)
