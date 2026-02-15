@@ -4,14 +4,19 @@ library(reshape2)
 library(e1071)
 
 # ==============================================================================
-# CONFIGURAZIONE SOGLIE (APPROCCIO FULL Z-SCORE)
+# CONFIGURAZIONE SOGLIE (APPROCCIO QUANTILI)
 # ==============================================================================
 # 1. FORMA
 SOGLIA_SOSPETTO <- 0.80   # Correlazione > 80% su ENTRAMBI i canali
 
-#Quantili
-Q_LOW  <- 0.025
-Q_HIGH <- 0.975 
+# 2. QUANTILI
+Q_LOW  <- 0.0015
+Q_HIGH <- 0.9985 
+
+# CALCOLO DINAMICO DELLE PERCENTUALI PER LE STAMPE E I GRAFICI
+PERC_LOW <- Q_LOW * 100
+PERC_HIGH <- Q_HIGH * 100
+PERC_INTERVAL <- (Q_HIGH - Q_LOW) * 100
 
 FS <- 360
 
@@ -33,13 +38,13 @@ ids_N   <- 1:nrow(matrice_N_MLII)
 # B. Calcolo Ampiezze N
 cat("    - Calcolo Ampiezze MLII e V1 su N...\n")
 amps_N_M <- apply(matrice_N_MLII, 1, function(x) max(x) - min(x))
-amps_N_V <- apply(matrice_N_V1, 1, function(x) max(x) - min(x)) # Corretto uso matrice originale per ampiezza
+amps_N_V <- apply(matrice_N_V1, 1, function(x) max(x) - min(x))
 
 # C. Calcolo Kurtosis e Skewness N
 cat("    - Calcolo Statistiche MLII e V1 su N...\n")
-K_N_M <- apply(matrice_N_MLII, 1, kurtosis, type=2); 
+K_N_M <- apply(matrice_N_MLII, 1, kurtosis, type=2) 
 S_N_M <- apply(matrice_N_MLII, 1, skewness, type=2)
-K_N_V <- apply(matrice_N_V1, 1, kurtosis, type=2); 
+K_N_V <- apply(matrice_N_V1, 1, kurtosis, type=2) 
 S_N_V <- apply(matrice_N_V1, 1, skewness, type=2)
 
 cat(">>> Profilazione Statistica Completa (Ampiezza, Skew, Kurt)...\n")
@@ -113,7 +118,7 @@ for(k in nomi_cluster) {
   # B. Creiamo gli Istogrammi delle Statistiche (6 pannelli)
   df_k_long <- melt(df_k[, -1]) # Rimuovi colonna Cluster dal melt
   
-  # Creazione dataframe per le linee di riferimento (Quantili 0.15% e 99.85%)
+  # Creazione dataframe per le linee di riferimento
   df_lines <- data.frame(
     variable = c("Amp_M", "Kur_M", "Skw_M", "Amp_V", "Kur_V", "Skw_V"),
     q_low  = c(stats$AmpM_qL, stats$KM_qL, stats$SM_qL, stats$AmpV_qL, stats$KV_qL, stats$SV_qL),
@@ -121,19 +126,15 @@ for(k in nomi_cluster) {
   )
   
   p_hist <- ggplot(df_k_long, aes(x=value)) +
-    # Istogramma di sfondo
     geom_histogram(aes(y=..density..), bins=30, fill="skyblue", color="black", alpha=0.6) +
-    # Linea di densità lisciata
     geom_density(color="darkblue", size=1) +
-    
-    # Linee dei Quantili (Rosse Tratteggiate - Limiti Empirici)
     geom_vline(data=df_lines, aes(xintercept=q_low), color="red", linetype="dashed", size=1) +
     geom_vline(data=df_lines, aes(xintercept=q_high), color="red", linetype="dashed", size=1) +
-    
     facet_wrap(~variable, scales="free", ncol=3) +
     theme_bw() +
+    # STRINGA DINAMICA NEL SOTTOTITOLO
     labs(title=paste("Distribuzione Statistica Cluster", k), 
-         subtitle="Linee Rosse: Intervallo di Tolleranza Empirico (95% dei dati)",
+         subtitle=paste0("Linee Rosse: Intervallo di Tolleranza Empirico (", PERC_INTERVAL, "% dei dati)"),
          x="Valore Metrica", y="Densità")
   
   print(p_hist)
@@ -141,9 +142,9 @@ for(k in nomi_cluster) {
 # ----------------------------------------------------------------------
 
 # ==============================================================================
-# STEP 2: SCANSIONE FORENSE (Z-SCORE)
+# STEP 2: SCANSIONE FORENSE
 # ==============================================================================
-cat(">>> [STEP 2] Scansione Forense (Z-Score)...\n")
+cat(">>> [STEP 2] Scansione Forense...\n")
 
 classifica <- data.frame()
 
@@ -163,19 +164,14 @@ for(k in nomi_cluster) {
   avg_corr <- pmin(as.vector(cor(t(seg_N_M), tpl_M)), as.vector(cor(t(seg_N_V), tpl_V)))
   
   # 3. TEST DEI QUANTILI
-  
-  # Restituisce TRUE se è dentro, FALSE se è fuori
   pass_AmpM <- (amps_N_M >= stats$AmpM_qL) & (amps_N_M <= stats$AmpM_qH)
   pass_AmpV <- (amps_N_V >= stats$AmpV_qL) & (amps_N_V <= stats$AmpV_qH)
-  
   pass_KM <- (K_N_M >= stats$KM_qL) & (K_N_M <= stats$KM_qH)
   pass_KV <- (K_N_V >= stats$KV_qL) & (K_N_V <= stats$KV_qH)
-  
   pass_SM <- (S_N_M >= stats$SM_qL) & (S_N_M <= stats$SM_qH)
   pass_SV <- (S_N_V >= stats$SV_qL) & (S_N_V <= stats$SV_qH)
   
-  # 4. AGGREGAZIONE LOGICA (Deve superare TUTTI i 6 test contemporaneamente)
-  # Se la somma dei TRUE è 6, significa che ha passato tutto.
+  # 4. AGGREGAZIONE LOGICA
   punteggio_pass <- pass_AmpM + pass_AmpV + pass_KM + pass_KV + pass_SM + pass_SV
   ha_passato_tutto <- (punteggio_pass == 6)
   
@@ -194,7 +190,6 @@ dt_class <- as.data.table(classifica)
 # ==============================================================================
 dt_best_match <- dt_class[order(Beat_ID, -Correlazione), .SD[1], by=Beat_ID]
 
-# Il battito è colpevole se ha una grande correlazione E ha passato il test dei quantili
 dt_colpevoli <- dt_best_match[
   Correlazione > SOGLIA_SOSPETTO & 
     Passa_Statistica == TRUE
@@ -209,8 +204,9 @@ cat("============================================================\n")
 cat(sprintf("Totale Battiti 'N' Scansionati: %d\n", n_tot))
 cat("CRITERI DI ACCUSA:\n")
 cat(sprintf("  1. Correlazione > %.0f%%\n", SOGLIA_SOSPETTO*100))
-cat(sprintf("  2. COERENZA STATISTICA TOTALE: Intervallo Quantilico (%.2f%% - %.2f%%)\n", Q_LOW*100, Q_HIGH*100))
-cat("      (Il battito deve rientrare nel 95% della distribuzione empirica per:\n")
+# STRINGHE DINAMICHE NEL REPORT IN CONSOLE
+cat(sprintf("  2. COERENZA STATISTICA TOTALE: Intervallo Quantilico (%.2f%% - %.2f%%)\n", PERC_LOW, PERC_HIGH))
+cat(sprintf("      (Il battito deve rientrare nel %g%% della distribuzione empirica per:\n", PERC_INTERVAL))
 cat("       Ampiezza, Skewness e Curtosi sui due i canali)\n")
 cat("------------------------------------------------------------\n")
 cat(sprintf("CANDIDATI SELEZIONATI: %d (%.3f%%)\n", n_colp, (n_colp/n_tot)*100))
@@ -232,10 +228,10 @@ if(n_colp > 0) {
     cent  <- centroidi[[as.character(clust)]]
     len_p <- min(ncol(matrice_N_MLII), length(cent$MLII))
     
-    # Etichetta aggiornata: rimossi i riferimenti allo Z-Score
+    # ETICHETTA DEL PANNELLO DINAMICA (es: PASS (99.7%))
     lbl <- paste0("CASO ", i, "\nBeat ", bid, " (Cl ", clust, ")\n",
                   "Corr: ", round(dt_colpevoli$Correlazione[i]*100,0), "%\n",
-                  "Statistica: PASS (95%)")
+                  "Statistica: PASS (", PERC_INTERVAL, "%)")
     
     df_temp <- rbind(
       data.frame(Time=1:len_p, mV=matrice_N_MLII[bid, 1:len_p], Canale="MLII", Tipo="Recuperato (N)", Panel=lbl),
@@ -257,9 +253,9 @@ if(n_colp > 0) {
     scale_linetype_manual(values = c("Recuperato (N)"="solid", "PVC Template"="dashed")) +
     scale_size_manual(values = c("Recuperato (N)"=0.8, "PVC Template"=1.0)) +
     facet_grid(Panel ~ Canale, scales="free_y", switch="y") +
-    # Titoli aggiornati
+    # TITOLI E SOTTOTITOLI DINAMICI
     labs(title = "CANDIDATI FALSI NEGATIVI (QUANTILI EMPIRICI)", 
-         subtitle="Battiti simili al cluster (Ampiezza e Forma entro il 95% empirico).", 
+         subtitle=paste0("Battiti simili al cluster (Ampiezza e Forma entro il ", PERC_INTERVAL, "% empirico)."), 
          x="Campioni", y="mV") +
     theme(legend.position="top", strip.text.y.left = element_text(angle=0, size=7, face="bold"), 
           panel.spacing.y = unit(0.5, "lines"))
