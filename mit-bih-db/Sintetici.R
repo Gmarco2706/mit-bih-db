@@ -162,9 +162,7 @@ analizza_dataset <- function(path_mlii, path_v1, nome_dataset, col_hist, col_box
           theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
           labs(title = paste("Correlazione Incrociata:", nome_dataset),
                subtitle = "MLII vs V1 Feature Dependencies", x="", y=""))
-  
-  # 7. Scatter Plots (SEPARATI COME RICHIESTO)
-  
+
   # Scatter 1: Ampiezza
   print(ggplot(df_full, aes(x = Amp_MLII, y = Amp_V1)) +
           geom_point(alpha = 0.3, color = col_box) +
