@@ -186,7 +186,7 @@ for(k in nomi_cluster) {
 dt_class <- as.data.table(classifica)
 
 # ==============================================================================
-# STEP 5: FILTRO COLPEVOLI (CRITERIO UNICO)
+# STEP 5: FILTRO COLPEVOLI 
 # ==============================================================================
 dt_best_match <- dt_class[order(Beat_ID, -Correlazione), .SD[1], by=Beat_ID]
 
