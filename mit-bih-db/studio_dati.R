@@ -98,7 +98,6 @@ prepara_battito_plot <- function(matrice_mlii, matrice_v1, riga, label) {
   df_long <- melt(df, id.vars = "t_ms", variable.name = "Lead", value.name = "mV")
   setDT(df_long) 
   
-  # Ora l'operatore := funzionerà correttamente
   df_long[, Tipo := label]
   return(df_long)
 }
@@ -221,7 +220,7 @@ print(head(liste_V))
 # --- FILTRAGGIO SINCRONIZZATO (Mantiene l'allineamento tra MLII e V1) ---
 
 # 1. Per i battiti NORMALI (N)
-# Il battito è valido solo se NON ha NA su MLII *E* NON ha NA su V1
+# Il battito è valido solo se NON ha NA su MLII E NON ha NA su V1
 idx_validi_N <- complete.cases(liste_N$MLII) & complete.cases(liste_N$V1)
 
 matrice_N_MLII <- liste_N$MLII[idx_validi_N, ]

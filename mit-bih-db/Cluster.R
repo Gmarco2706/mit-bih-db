@@ -80,12 +80,12 @@ if(max(labs) > 0) {
   wss_val <- calcola_wss(X1, labs)
   cat(sprintf("WSS (Compattezza): %.2f\n", wss_val))
   
-  # --- NUOVA PARTE: SILHOUETTE SCORE ---
   # Calcoliamo solo sui punti assegnati (escludendo il rumore 0)
   idx_clustered <- which(labs != 0)
   
   if(length(unique(labs[idx_clustered])) > 1) {
-    cat(">>> Calcolo Silhouette Score (potrebbe richiedere qualche secondo)...\n")
+    cat(">>> Calcolo Silhouette Score...\n")
+    
     # Calcolo distanza euclidea solo sui punti clusterizzati
     dist_matrix <- dist(X1[idx_clustered, ])
     sil_obj <- silhouette(labs[idx_clustered], dist_matrix)
@@ -126,7 +126,7 @@ if(max(labs) > 0) {
   
   for(k in u_cl) {
     idx <- which(labs == k)
-    # Calcolo media colonne (gestisce anche caso 1 solo elemento)
+    # Calcolo media colonne
     if(length(idx)>1) {
       avg_MLII <- colMeans(matrice_V_MLII_clean[idx,])
       avg_V1   <- colMeans(matrice_V_V1_clean[idx,])
