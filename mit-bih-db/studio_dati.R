@@ -51,38 +51,52 @@ rimuovi_baseline <- function(df, finestra_secondi = 0.8, fs = 360) {
 }
 
 trova_picco_reale <- function(segnale_completo, indici_grezzi, raggio) {
-  n <- length(indici_grezzi)
-  indici_corretti <- numeric(n)
   max_len <- length(segnale_completo)
   cat("    Ricalcolo posizione precisa in corso... ")
-  for(i in 1:n) {
-    centro_grezzo <- indici_grezzi[i]
+  
+  # La funzione sapply applica la logica a tutti gli elementi del vettore senza bisogno di inizializzare vettori vuoti 
+  indici_corretti <- sapply(indici_grezzi, function(centro_grezzo) {
     inizio_finestra <- max(1, centro_grezzo - raggio)
     fine_finestra   <- min(max_len, centro_grezzo + raggio)
     chunk <- segnale_completo[inizio_finestra:fine_finestra]
     pos_max <- which.max(abs(chunk))
-    if (length(pos_max) == 0) { indici_corretti[i] <- centro_grezzo
-    } else { indici_corretti[i] <- (inizio_finestra - 1) + pos_max }
-  }
+    if (length(pos_max) == 0) { 
+      return(centro_grezzo)
+    } else { 
+      return((inizio_finestra - 1) + pos_max) 
+    }
+  })
+  
   cat("Fatto.\n")
   return(indici_corretti)
 }
 
 estrai_matrice_battiti <- function(df, indici_picchi, prima, dopo) {
   n_battiti <- length(indici_picchi)
-  lunghezza <- prima + dopo + 1
-  matrice_mlii <- matrix(NA, nrow = n_battiti, ncol = lunghezza)
-  matrice_v1   <- matrix(NA, nrow = n_battiti, ncol = lunghezza)
   cat(paste("   Estrazione di", n_battiti, "segmenti in corso... "))
-  for(i in 1:n_battiti) {
-    idx <- indici_picchi[i]
+  
+  # Estraiamo per MLII usando sapply, che restituisce una matrice con i battiti come colonne. Usiamo t() per trasporre.
+  matrice_mlii <- t(sapply(indici_picchi, function(idx) {
     start <- idx - prima
     end   <- idx + dopo
     if(start >= 1 && end <= nrow(df)) {
-      matrice_mlii[i, ] <- df$MLII[start:end]
-      matrice_v1[i, ]   <- df$V1[start:end]
+      return(df$MLII[start:end])
+    } else {
+      return(rep(NA_real_, prima + dopo + 1))
     }
-  }
+  }))
+  
+  # Estraiamo per V1
+  matrice_v1 <- t(sapply(indici_picchi, function(idx) {
+    start <- idx - prima
+    end   <- idx + dopo
+    if(start >= 1 && end <= nrow(df)) {
+      return(df$V1[start:end])
+    } else {
+      return(rep(NA_real_, prima + dopo + 1))
+    }
+  }))
+  
   cat("Fatto.\n")
   return(list(MLII = matrice_mlii, V1 = matrice_v1))
 }
@@ -102,6 +116,7 @@ prepara_battito_plot <- function(matrice_mlii, matrice_v1, riga, label) {
   return(df_long)
 }
 
+# (Già ottimizzata nativamente con apply nel tuo codice originale)
 estrai_features_statistiche <- function(matrice, label) {
   dt_features <- data.table(
     Media    = rowMeans(matrice),
@@ -220,14 +235,12 @@ print(head(liste_V))
 # --- FILTRAGGIO SINCRONIZZATO (Mantiene l'allineamento tra MLII e V1) ---
 
 # 1. Per i battiti NORMALI (N)
-# Il battito è valido solo se NON ha NA su MLII E NON ha NA su V1
 idx_validi_N <- complete.cases(liste_N$MLII) & complete.cases(liste_N$V1)
 
 matrice_N_MLII <- liste_N$MLII[idx_validi_N, ]
 matrice_N_V1   <- liste_N$V1[idx_validi_N, ]
 
 # 2. Per le PVC (V)
-# Stessa logica: scartiamo il battito se manca un pezzo su uno qualsiasi dei canali
 idx_validi_V <- complete.cases(liste_V$MLII) & complete.cases(liste_V$V1)
 
 matrice_V_MLII <- liste_V$MLII[idx_validi_V, ]
@@ -316,8 +329,8 @@ if(length(id_kurt_20_50) > 0) {
 # --------------------------------------------------------------------------------------------------------------
 # --- 5. ELIMINAZIONE INCROCIATA E RESOCONTO ---
 
-outlier_MLII <- which((df_V_MLII$Max_Amp > 6  | df_V_MLII$Max_Amp<1) | df_V_MLII$Kurtosis > 7.5) # Valori presi dal boxplot
-outlier_V1 <- which(df_V_V1$Max_Amp > 6 | df_V_V1$Kurtosis > 15 | df_V_V1$Skewness > 2.5 | df_V_V1$Skewness < -5.0) # Valori presi dal boxplot
+outlier_MLII <- which((df_V_MLII$Max_Amp > 6  | df_V_MLII$Max_Amp<1) | df_V_MLII$Kurtosis > 7.5) 
+outlier_V1 <- which(df_V_V1$Max_Amp > 6 | df_V_V1$Kurtosis > 15 | df_V_V1$Skewness > 2.5 | df_V_V1$Skewness < -5.0) 
 indici_da_rimuovere <- unique(c(outlier_MLII, outlier_V1))
 
 cat(sprintf(">>> Eliminazione incrociata: rimozione di %d battiti su %d totali.\n", length(indici_da_rimuovere), nrow(df_V_MLII)))
@@ -328,8 +341,8 @@ matrice_V_MLII_clean <- matrice_V_MLII[-indici_da_rimuovere, ]
 matrice_V_V1_clean   <- matrice_V_V1[-indici_da_rimuovere, ]
 
 # Scrittura su file
-fwrite(as.data.table(matrice_V_MLII_clean), file = "../matrice_MLII_clean.csv", col.names = TRUE) # salvataggio per generazione dati sintetici
-fwrite(as.data.table(matrice_V_V1_clean), file = "../matrice_V1_clean.csv", col.names = TRUE) # salvataggio per generazione dati sintetici
+fwrite(as.data.table(matrice_V_MLII_clean), file = "../matrice_MLII_clean.csv", col.names = TRUE) 
+fwrite(as.data.table(matrice_V_V1_clean), file = "../matrice_V1_clean.csv", col.names = TRUE) 
 
 cat("\n--- RESOCONTO ELIMINAZIONE INCROCIATA OUTLIER ---\n")
 totali <- nrow(df_V_MLII); rimossi <- length(indici_da_rimuovere); rimasti <- totali - rimossi
@@ -343,11 +356,9 @@ resoconto_medie <- data.table(
 resoconto_medie[, Variazione_Perc := ((Dopo - Prima) / Prima) * 100]
 print(resoconto_medie)
 
-
 # --- RIGENERAZIONE ISTOGRAMMI DOPO PULIZIA (PVC) ---
 cat(">>> Generazione istogrammi sui dati puliti (eliminazione incrociata)...\n")
 
-# 1. Istogrammi PVC su MLII (PULITI)
 p1_v_m_clean <- plot_istogramma_con_media(df_V_MLII_clean, "Max_Amp", "Ampiezza MLII (V) - PULITO", "red")
 p2_v_m_clean <- plot_istogramma_con_media(df_V_MLII_clean, "Skewness", "Asimmetria MLII (V) - PULITO", "darkred")
 p3_v_m_clean <- plot_istogramma_con_media(df_V_MLII_clean, "Kurtosis", "Kurtosis MLII (V) - PULITO", "orange")
@@ -355,7 +366,6 @@ p3_v_m_clean <- plot_istogramma_con_media(df_V_MLII_clean, "Kurtosis", "Kurtosis
 print((p1_v_m_clean | p2_v_m_clean | p3_v_m_clean) + 
         plot_annotation(title = "MLII (Clean): Distribuzioni PVC dopo rimozione outlier"))
 
-# 2. Istogrammi PVC su V1 (PULITI)
 p1_v_v1_clean <- plot_istogramma_con_media(df_V_V1_clean, "Max_Amp", "Ampiezza V1 (V) - PULITO", "red")
 p2_v_v1_clean <- plot_istogramma_con_media(df_V_V1_clean, "Skewness", "Asimmetria V1 (V) - PULITO", "darkred")
 p3_v_v1_clean <- plot_istogramma_con_media(df_V_V1_clean, "Kurtosis", "Kurtosis V1 (V) - PULITO", "orange")
@@ -366,7 +376,6 @@ print((p1_v_v1_clean | p2_v_v1_clean | p3_v_v1_clean) +
 # --- MATRICE DI CORRELAZIONE INCROCIATA (Solo V) ---
 cat(">>> Analisi delle dipendenze tra i canali per la classe V...\n")
 
-# Dataset unico per i battiti V con i dati di entrambi i canali
 df_V_full <- data.table(
   Amp_MLII  = df_V_MLII_clean$Max_Amp,
   Skew_MLII = df_V_MLII_clean$Skewness,
@@ -376,34 +385,29 @@ df_V_full <- data.table(
   Skew_V1   = df_V_V1_clean$Skewness
 )
 
-# Calcolo correlazione
 cor_V <- cor(df_V_full, use = "complete.obs")
 
-# Visualizzazione Heatmap
 print(ggplot(melt(cor_V), aes(Var1, Var2, fill=value)) +
-  geom_tile() +
-  scale_fill_gradient2(low="blue", high="red", mid="white", limit=c(-1,1)) +
-  geom_text(aes(label = round(value, 2)), size = 4) +
-  theme_minimal() +
-  labs(title = "OB1: Struttura dipendenze Classe V",
-       subtitle = "Correlazione incrociata tra le feature di MLII e V1",
-       x="", y=""))
+        geom_tile() +
+        scale_fill_gradient2(low="blue", high="red", mid="white", limit=c(-1,1)) +
+        geom_text(aes(label = round(value, 2)), size = 4) +
+        theme_minimal() +
+        labs(title = "OB1: Struttura dipendenze Classe V",
+             subtitle = "Correlazione incrociata tra le feature di MLII e V1",
+             x="", y=""))
 
-# --- SCATTER PLOT INCROCIATO ---
 print(ggplot(df_V_full, aes(x = Amp_MLII, y = Amp_V1)) +
-  geom_point(alpha = 0.3, color = "red") +
-  theme_ecg +
-  labs(title = "OB1: Relazione Ampiezza MLII vs V1 (Solo V)",
-       x = "Ampiezza MLII (mV)", y = "Ampiezza V1 (mV)"))
+        geom_point(alpha = 0.3, color = "red") +
+        theme_ecg +
+        labs(title = "OB1: Relazione Ampiezza MLII vs V1 (Solo V)",
+             x = "Ampiezza MLII (mV)", y = "Ampiezza V1 (mV)"))
 
-# --- SCATTER PLOT INCROCIATO ---
 print(ggplot(df_V_full, aes(x = Skew_MLII, y = Skew_V1)) +
         geom_point(alpha = 0.3, color = "orange") +
         theme_ecg +
         labs(title = "OB1: Relazione Skewness MLII vs V1 (Solo V)",
              x = "Skewness MLII", y = "Skewness V1"))
 
-# --- SCATTER PLOT INCROCIATO ---
 print(ggplot(df_V_full, aes(x = Kurt_MLII, y = Kurt_V1)) +
         geom_point(alpha = 0.3, color = "green") +
         theme_ecg +
@@ -411,6 +415,4 @@ print(ggplot(df_V_full, aes(x = Kurt_MLII, y = Kurt_V1)) +
              subtitle = "Identificazione di bias di ampiezza tra le derivazioni",
              x = "Curtosi MLII", y = "Curtosi V1"))
 
-
-# --- PULIZIA FINALE ---
 remove(df_N_MLII, df_V_MLII, df_N_V1, df_V_V1)
