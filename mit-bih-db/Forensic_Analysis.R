@@ -7,7 +7,7 @@ library(e1071)
 # CONFIGURAZIONE SOGLIE (APPROCCIO QUANTILI)
 # ==============================================================================
 # 1. FORMA
-SOGLIA_SOSPETTO <- 0.80   # Correlazione > 80% su ENTRAMBI i canali
+SOGLIA_SOSPETTO <- 0.90   # Correlazione > 80% su ENTRAMBI i canali
 
 # 2. QUANTILI
 Q_LOW  <- 0.0015
